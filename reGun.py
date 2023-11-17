@@ -21,20 +21,24 @@ GAME_COLORS = [RED, BLUE, YELLOW, GREEN, MAGENTA, CYAN]
 WIDTH = 800
 HEIGHT = 600
 
-ANGRYA = 0.7
-ANGRYVK = 1
-HITA = 0
-JK = 0.02
-HITK = 0.5
+ANGRYA = 0.7 #ускоренеи бомбочки
+ANGRYVK = 1 #чем ниже тем больше трение бомбочки о воздух
+HITA = 0 #ускорение рандомной мишенеи после удара
+JK = 0.02 #рывок рандомной мишенеи
+HITK = 0.5 #сколько энергии остаетсяу у рандомной мишени после удара
 
-GUNV = 5
+GUNV = 5 #Скорость пушки
 
-PROB0 = 0.003
-PROB1 = 0.06
-PROB2 = 0.01
-PROB3 = 0.001
+PROB0 = 0.001
+"""Вероятность выстрела босса шариком"""
+PROB1 = 0.006
+"""Вероятность выстрела босса пулей"""
+PROB2 = 0.005
+"""Вероятность выстрела босса бомбочкой"""
+PROB3 = 0.005
+"""Вероятность выстрела босса рандомной целью"""
 
-BOSSLIVE = 10
+BOSSLIVE = 20
 #Классы
 
 class Moveble():
@@ -58,9 +62,10 @@ class Moveble():
         self.y += self.vy
 
 class Drawable():
+    """Можно написать свой спрайт в функции GetSprite. По умолчанию смотрит вправо, поворачивается на угол объекта"""
     def __init__(self, screen):
         self.screen = screen
-        
+
     def Draw(self, x, y, angle = 0, sufrace : pygame.Surface = None):
         """Отрисовывает объект в нужных координатах"""
         if(sufrace == None):
@@ -87,7 +92,7 @@ class Drawable():
                                           (x-50, y+50)])
 
 class Entity(Moveble, Drawable):
-
+    """Фигня, которая двигается и рисуется"""
     def __init__(self, screen, x = 50, y = 50, colisionR = 0):
         Moveble.__init__(self, x, y)
         Drawable.__init__(self, screen)
@@ -98,22 +103,26 @@ class Entity(Moveble, Drawable):
 
     @property
     def an(self):
+        """Угол в радианах"""
         return self.__an
     @an.setter
     def an(self, an):
         self.__an = an
     @property
     def anDeg(self):
+        """Угол в градусах"""
         return self.an * 180/math.pi
     @anDeg.setter
     def anDeg(self, anDeg):
         self.an = anDeg/180 * math.pi 
 
     def Update(self):
+        """Выполняет то что надо сделать в тик"""
         self.MoveUpdate()
         self.Draw(self.x, self.y, self.anDeg)
 
     def HitTest(self, obj):
+        """Проверяет столкнулось ли"""
         if((self.x - obj.x)**2 + (self.y - obj.y)**2)**0.5 <= (self.colisionR + obj.colisionR):
             return True
         else:
@@ -121,6 +130,7 @@ class Entity(Moveble, Drawable):
         
 #Игровые классы
 class Ball(Entity):
+    """Самый простой снаряд"""
     def __init__(self, screen: pygame.Surface, x=40, y=450):
         """ Конструктор класса ball
 
@@ -136,6 +146,7 @@ class Ball(Entity):
         self.colisionR = self.r
     def Update(self):
         Entity.Update(self)
+        self.an = -math.atan2(self.vy, self.vx)
         if (self.x >= 800):
             self.vx = -0.6*self.vx
             self.x = 799
@@ -154,6 +165,9 @@ class Ball(Entity):
 
     def GetSprite(self, surf, x=50, y=50):
         pygame.draw.circle(surf, self.color, (x, y), self.r)
+        rect = pygame.Rect(0, 0, self.r, self.r/2)
+        rect.center = (x+self.r/5, y)
+        pygame.draw.rect(surf, BLACK, rect)
     def hittest(self, obj):
         """Функция проверяет сталкивалкивается ли данный обьект с целью, описываемой в обьекте obj.
 
@@ -209,6 +223,7 @@ class Gun(Entity):
         self.score = 0
         self.dangerous = False
         self.ballType = 0
+        self.r = 12
     def fire2_start(self, event):
         self.f2_on = 1
 
@@ -261,10 +276,15 @@ class Gun(Entity):
                 self.an += math.pi
 
     def GetSprite(self, surf, x=50, y=50):
+        track = pygame.Rect(x, y, self.r*2, 5)
+        track.center = (x, y+self.r)
+        pygame.draw.rect(surf, BLACK, track)
+        track.center = (x, y-self.r)
+        pygame.draw.rect(surf, BLACK, track)
         length = self.f2_power * 1.2
         width = 2
         pygame.draw.polygon(surf, self.color, [(x, y+width), (x, y-width), (x+length, y-width), (x+length, y+width)])
-        pygame.draw.circle(surf, GREY, (x, y), 12)
+        pygame.draw.circle(surf, GREY, (x, y), self.r)
 
     def Update(self):
         super().Update()
@@ -276,16 +296,20 @@ class Gun(Entity):
             self.color = GREY
 
 class Target(Entity):
-    def __init__(self, screen, revives = 1, score = 1):
+    """Злая штука. По умолчанию не двигается"""
+    def __init__(self, screen, revives = 1, score = 1, live = 1):
         super().__init__(screen, 400, 500)
+        self.live_defolt = live
+        self.live = live
         self.new_target()
         self.colisionR = self.r
         self.revives = revives
-        self.score = 1
+        self.score = score
+
     def new_target(self):
         """ Инициализация новой цели. """
         rnd = random.randint
-        self.live = 1
+        self.live = self.live_defolt
         x = self.x = rnd(600, 780)
         y = self.y = rnd(300, 550)
         r = self.r = rnd(2, 50)
@@ -294,6 +318,7 @@ class Target(Entity):
         pygame.draw.circle(surf, self.color, (x, y), self.r)
 
 class TargetRandom(Target):
+    """Хренчит во всех направлениях как душе угодно"""
     def new_target(self):
         Target.new_target(self)
         self.vx = 0
@@ -326,6 +351,7 @@ class TargetRandom(Target):
         super().Update()
 
 class TargetAngry(TargetRandom):
+    """Злая бомбочка, двигает на пушку"""
     def new_target(self):
         super().new_target()
         self.color = BLACK
@@ -358,6 +384,7 @@ class TargetAngry(TargetRandom):
         pygame.draw.circle(surf, self.color, (x, y), self.r)
 
 class BOSS(TargetRandom):
+    """Самый злой  и самый главный"""
     def __init__(self, screen):
         super().__init__(screen)
         self.live = 30
@@ -411,16 +438,16 @@ class BOSS(TargetRandom):
         angles = [(x+ self.r*k*math.cos(phi), y + self.r*k*math.sin(phi)) for phi in ls]
         pygame.draw.polygon(surf, (13, 57, 12), angles)
 
-
-
 def Main():
     balls = list(filter(lambda x: isinstance(x, Ball), entities))
     targets = list(filter(lambda x: isinstance(x, Target), entities))
-
+    
+    #Убираем мертвые шарики
     for b in balls:
         if(b.y > 590 and b.vy == 0):
             b.revives = 0
 
+    
     for b in balls:
         for target in targets:
             if b.hittest(target) and target.live:
@@ -429,23 +456,27 @@ def Main():
                 if(target.live == 0):
                     target.new_target()
                     target.revives -= 1
-    
-    for entity in targets:
-        if(gun.HitTest(entity) and entity.dangerous):
-            gun.lives -= 1
-            entity.new_target()
-
-    for b in balls:
+                else:
+                    target.x += 2*((b.y > target.y)-0.5) * (target.colisionR + b.colisionR)
+                    target.y += 2*((b.x > target.x)-0.5) * (target.colisionR + b.colisionR)
+                    
         if(gun.hittest(b)):
             gun.lives -= 1
             entities.remove(b)
+    for target in targets:
+        if(gun.HitTest(target) and target.dangerous):
+            gun.lives -= 1
+            target.live -= 1
+            if(target.live == 0):
+                target.new_target()
 
     for entity in entities:
         if(gun.HitTest(entity) and entity.dangerous):
             gun.lives -= 1
-            gun.x -= (entity.x > gun.x) * (entity.colisionR + gun.colisionR)
-            gun.y -= (entity.y > gun.y) * (entity.colisionR + gun.colisionR)
+            gun.x -= 3*((entity.x > gun.x)-0.5) * (entity.colisionR + gun.colisionR)
+            gun.y -= 3*((entity.y > gun.y)-0.5) * (entity.colisionR + gun.colisionR)
 
+    
     for entity in entities:
         if(entity.revives <= 0):
             entities.remove(entity)
@@ -459,7 +490,6 @@ def Main():
         finished = True
 
 
-    
     img = font.render(f"Балл: {gun.score} Жизни: {gun.lives} Тип снаряда: {gun.ballType}", True, 0)
     
     bossLineSurfB = pygame.Surface((300, 5))
@@ -485,15 +515,13 @@ pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 
-
-
 entities = []
 
 gun = Gun(screen, 40, 450)
 entities.append(gun)
 entities.append(Target(screen, 0))
 entities.append(TargetRandom(screen, 0))
-entities.append(TargetAngry(screen, 0))
+entities.append(TargetAngry(screen, 1, live = 3))
 boss = BOSS(screen)
 boss.live = BOSSLIVE
 entities.append(boss)
@@ -546,10 +574,10 @@ while not finished:
 while not realyFinished:
     if (win):
         screen.fill(GREEN)
-        text = font.render("ТЫ НЕ ПРОИГРАЛ!", True, 0)
+        text = font.render(f"ТЫ НЕ ПРОИГРАЛ! БАЛЛЫ: {gun.score}", True, 0)
     else:
         screen.fill(RED)
-        text = font.render("СДОХ", True, 0)
+        text = font.render(f"СДОХ БАЛЛЫ: {gun.score}", True, 0)
 
     rect = text.get_rect()
     rect.center = (400,300)
